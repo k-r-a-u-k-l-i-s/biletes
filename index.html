@@ -9,14 +9,14 @@
   *,*::before,*::after{box-sizing:border-box}
   :root{
     --bg:#fff; --fg:#111418; --muted:#6b7280; --line:#e8e9ec;
-    --green:#15803d; --yellow:#b45309; --red:#b91c1c;
-    --green-bg:#ecfdf3; --yellow-bg:#fffbeb; --red-bg:#fef2f2;
+    --green:#15803d; --yellow:#b45309; --red:#b91c1c; --blue:#1d4ed8;
+    --green-bg:#ecfdf3; --yellow-bg:#fffbeb; --red-bg:#fef2f2; --blue-bg:#eff6ff;
   }
   @media (prefers-color-scheme:dark){
     :root{
       --bg:#0c0d0f; --fg:#f2f3f5; --muted:#8b8f99; --line:#1e2024;
-      --green:#4ade80; --yellow:#fbbf24; --red:#f87171;
-      --green-bg:#0d2818; --yellow-bg:#2a1f06; --red-bg:#2a1113;
+      --green:#4ade80; --yellow:#fbbf24; --red:#f87171; --blue:#93c5fd;
+      --green-bg:#0d2818; --yellow-bg:#2a1f06; --red-bg:#2a1113; --blue-bg:#11203a;
     }
   }
   html{-webkit-text-size-adjust:100%}
@@ -30,12 +30,19 @@
   h1{font-size:1.375rem; font-weight:650; letter-spacing:-.02em; margin:0}
   .meta{color:var(--muted); font-size:.8125rem; margin:.35rem 0 0}
 
-  .legend{display:flex; flex-wrap:wrap; gap:.25rem 1rem; margin:1rem 0 0;
+  .stats{display:flex; flex-wrap:wrap; gap:.75rem 1.75rem; margin:1.125rem 0 0}
+  .stats div{display:flex; flex-direction:column; gap:.1rem}
+  .stats b{font-size:1.25rem; font-weight:650; letter-spacing:-.02em;
+           font-variant-numeric:tabular-nums; line-height:1.1}
+  .stats span{font-size:.75rem; color:var(--muted)}
+
+  .legend{display:flex; flex-wrap:wrap; gap:.25rem 1rem; margin:1.125rem 0 0;
           font-size:.75rem; color:var(--muted)}
   .legend span{display:flex; align-items:center; gap:.4rem}
 
   .dot{width:.5rem; height:.5rem; border-radius:50%; flex:none; background:currentColor}
-  .ok{color:var(--green)} .low{color:var(--yellow)} .out{color:var(--red)}
+  .ok{color:var(--green)} .low{color:var(--yellow)}
+  .out{color:var(--red)} .soon{color:var(--blue)} .off{color:var(--muted)}
 
   ul{list-style:none; margin:1.5rem 0 0; padding:0; border-top:1px solid var(--line)}
   li{border-bottom:1px solid var(--line)}
@@ -51,13 +58,28 @@
         line-height:1.3; white-space:nowrap}
   .day{display:block; color:var(--fg); font-weight:550; font-size:.875rem}
   .title{font-size:.9375rem; min-width:0; overflow-wrap:anywhere}
+
+  .right{display:flex; align-items:center; gap:.5rem; justify-self:end}
+  .delta{font-size:.75rem; color:var(--muted); font-variant-numeric:tabular-nums;
+         white-space:nowrap}
   .count{
-    display:flex; align-items:center; gap:.45rem; justify-self:end;
+    display:flex; align-items:center; gap:.45rem;
     font-size:.8125rem; font-variant-numeric:tabular-nums; white-space:nowrap;
     padding:.15rem .5rem; border-radius:999px;
   }
   .count.ok{background:var(--green-bg)} .count.low{background:var(--yellow-bg)}
-  .count.out{background:var(--red-bg)}
+  .count.out{background:var(--red-bg)} .count.soon{background:var(--blue-bg)}
+  .count.off{background:var(--line)}
+
+  /* Nesen pabeigtās izrādes — sekundāra, klusināta sadaļa. */
+  .fin{margin-top:2.5rem}
+  .fin h2{font-size:.8125rem; font-weight:600; color:var(--muted); margin:0}
+  .fin ul{margin:.5rem 0 0}
+  .finrow{display:flex; flex-wrap:wrap; align-items:baseline; gap:.2rem .625rem;
+          padding:.5rem .25rem; font-size:.8125rem; color:var(--muted)}
+  .fdate{font-variant-numeric:tabular-nums; white-space:nowrap}
+  .ftitle{color:var(--fg); flex:1 1 8rem; min-width:0; overflow-wrap:anywhere}
+  .fleft{white-space:nowrap}
 
   .state{padding:3rem 0; text-align:center; color:var(--muted); font-size:.9375rem}
   button{
@@ -72,7 +94,7 @@
     li a,li .row{grid-template-columns:1fr auto; row-gap:.15rem}
     .when{grid-area:1/1; white-space:normal}
     .day{display:inline}
-    .count{grid-area:1/2}
+    .right{grid-area:1/2}
     .title{grid-area:2/1/auto/-1}
   }
 </style>
@@ -82,10 +104,13 @@
   <header>
     <h1>Biļešu pieejamība</h1>
     <p class="meta" id="meta">Ielādē…</p>
+    <div class="stats" id="stats"></div>
     <div class="legend">
       <span><i class="dot ok"></i>10 vai vairāk</span>
       <span><i class="dot low"></i>mazāk nekā 10</span>
       <span><i class="dot out"></i>izpārdots</span>
+      <span><i class="dot soon"></i>vēl nav pārdošanā</span>
+      <span><i class="dot off"></i>atcelts</span>
     </div>
   </header>
 
@@ -96,8 +121,9 @@
 (function () {
   "use strict";
 
-  var app  = document.getElementById("app");
-  var meta = document.getElementById("meta");
+  var app   = document.getElementById("app");
+  var meta  = document.getElementById("meta");
+  var stats = document.getElementById("stats");
 
   var fmtDate = new Intl.DateTimeFormat("lv-LV", { day: "numeric", month: "short" });
   var fmtDay  = new Intl.DateTimeFormat("lv-LV", { weekday: "short" });
@@ -110,17 +136,28 @@
     return m ? new Date(+m[1], m[2] - 1, +m[3], +m[4], +m[5]) : new Date(s);
   }
 
-  // Latviešu skaitļa formas: 1 biļete · 5 biļetes · 0/11–19/x0 biļešu
-  function biletes(n) {
-    var d = n % 10, h = n % 100;
-    if (d === 1 && h !== 11) return n + " biļete";
-    if (d === 0 || (h >= 11 && h <= 19)) return n + " biļešu";
-    return n + " biļetes";
-  }
+  function fmtNum(n) { return Number(n || 0).toLocaleString("lv-LV"); }
 
-  function level(n) {
-    if (!(n > 0)) return "out";
-    return n >= 10 ? "ok" : "low";
+  // Latviešu skaitļa formas: 1 biļete · 5 biļetes · 0/11–19/x0 biļešu.
+  // Viena vieta, kur glabājas likums — pārējais to izmanto.
+  function pluralForm(n, one, few, many) {
+    var d = n % 10, h = n % 100;
+    if (d === 1 && h !== 11) return one;
+    if (d === 0 || (h >= 11 && h <= 19)) return many;
+    return few;
+  }
+  function biletesWord(n) { return pluralForm(n, "biļete", "biļetes", "biļešu"); }
+  function biletes(n) { return fmtNum(n) + " " + biletesWord(n); }
+
+  var LABELS = { off: "Atcelts", soon: "Vēl nav pārdošanā", out: "Izpārdots" };
+
+  // Nulle nozīmē trīs dažādas lietas: atcelts, izpārdots vai pārdošana vēl nav
+  // sākusies. API pats tās nešķir, tāpēc atceltās nāk no saraksta build skriptā.
+  function level(e, now) {
+    if (e.cancelled) return "off";
+    if (e.s && parseDT(e.s) > now) return "soon";
+    if (!(e.n > 0)) return "out";
+    return e.n >= 10 ? "ok" : "low";
   }
 
   function esc(s) {
@@ -129,37 +166,85 @@
     });
   }
 
+  function stat(value, label) {
+    return "<div><b>" + esc(fmtNum(value)) + "</b><span>" + esc(label) + "</span></div>";
+  }
+
+  // "2026/2027" → "2026./2027." (latviešu kārtas skaitļu pieraksts)
+  function seasonLabel(id) {
+    return id ? String(id).replace("/", "./") + "." : "";
+  }
+
+  function row(e, now) {
+    var lv = level(e, now);
+    var inner =
+      '<div class="when"><span class="day">' + esc(fmtDate.format(e.at)) + "</span> " +
+      esc(fmtDay.format(e.at)) + " " + esc(fmtTime.format(e.at)) + "</div>" +
+      '<div class="title">' + esc(e.t) + "</div>" +
+      '<div class="right">' +
+      (e.delta > 0 ? '<span class="delta" title="Pārdotas kopš pēdējās pārbaudes">▼' +
+                     esc(fmtNum(e.delta)) + "</span>" : "") +
+      '<div class="count ' + lv + '"><i class="dot"></i>' +
+      (LABELS[lv] || esc(biletes(e.n))) + "</div></div>";
+
+    return "<li>" + (e.u
+      ? '<a href="' + esc(e.u) + '" rel="noopener">' + inner + "</a>"
+      : '<div class="row">' + inner + "</div>") + "</li>";
+  }
+
+  function finishedHtml(list) {
+    if (!list || !list.length) return "";
+    return '<section class="fin"><h2>Nesen pabeigtas</h2><ul>' + list.map(function (f) {
+      return '<li><div class="finrow">' +
+        '<span class="fdate">' + esc(fmtDate.format(parseDT(f.d))) + "</span>" +
+        '<span class="ftitle">' + esc(f.t) + "</span>" +
+        '<span class="fleft">' +
+        (f.n > 0 ? "palika " + esc(biletes(f.n)) : "izpārdots") +
+        "</span></div></li>";
+    }).join("") + "</ul></section>";
+  }
+
+  function seasonsHtml(list) {
+    if (!list || !list.length) return "";
+    return '<section class="fin"><h2>Iepriekšējās sezonas</h2><ul>' + list.map(function (s) {
+      return '<li><div class="finrow">' +
+        '<span class="ftitle">' + esc(seasonLabel(s.id)) + " sezona</span>" +
+        '<span class="fleft">' + esc(biletes(s.sold)) + "</span>" +
+        "</div></li>";
+    }).join("") + "</ul></section>";
+  }
+
   function render(data) {
     var now = Date.now();
     var events = (data.events || [])
-      .map(function (e) { return { at: parseDT(e.d), t: e.t, n: e.n, u: e.u }; })
+      .map(function (e) {
+        return { at: parseDT(e.d), t: e.t, n: e.n, u: e.u, s: e.s,
+                 cancelled: e.cancelled, delta: e.delta };
+      })
       .filter(function (e) { return e.at >= now - 36e5; });
 
     meta.textContent = (data.venue ? data.venue + " · a" : "A") +
       "tjaunots " + fmtTime.format(new Date(data.updated));
 
-    if (!events.length) {
-      app.innerHTML = '<p class="state">Nav gaidāmu izrāžu.</p>';
-      return;
-    }
+    // Skaitļus rēķinām no tā, kas tiešām redzams sarakstā, lai galvene un
+    // saraksts nekad nesaietu pretrunā (lapa filtrē stingrāk nekā skripts).
+    var remaining = events.reduce(function (sum, e) { return sum + (e.n || 0); }, 0);
+    stats.innerHTML =
+      stat(remaining, biletesWord(remaining)) +
+      stat(events.length, pluralForm(events.length, "izrāde", "izrādes", "izrāžu")) +
+      stat(data.sold, seasonLabel(data.season) + " sezonā pārdots");
 
-    app.innerHTML = "<ul>" + events.map(function (e) {
-      var lv = level(e.n);
-      var inner =
-        '<div class="when"><span class="day">' + esc(fmtDate.format(e.at)) + "</span> " +
-        esc(fmtDay.format(e.at)) + " " + esc(fmtTime.format(e.at)) + "</div>" +
-        '<div class="title">' + esc(e.t) + "</div>" +
-        '<div class="count ' + lv + '"><i class="dot"></i>' +
-        (lv === "out" ? "Izpārdots" : esc(biletes(e.n))) + "</div>";
-
-      return "<li>" + (e.u
-        ? '<a href="' + esc(e.u) + '" rel="noopener">' + inner + "</a>"
-        : '<div class="row">' + inner + "</div>") + "</li>";
-    }).join("") + "</ul>";
+    app.innerHTML =
+      (events.length
+        ? "<ul>" + events.map(function (e) { return row(e, now); }).join("") + "</ul>"
+        : '<p class="state">Nav gaidāmu izrāžu.</p>') +
+      finishedHtml(data.finished) +
+      seasonsHtml(data.seasons);
   }
 
   function fail() {
     meta.textContent = "";
+    stats.innerHTML = "";
     app.innerHTML = '<p class="state">Neizdevās ielādēt datus.' +
                     '<br><button type="button" id="retry">Mēģināt vēlreiz</button></p>';
     document.getElementById("retry").onclick = load;
