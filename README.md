@@ -7,7 +7,7 @@ norises vietai **360** (Austrumu Robeža teātra klubs).
 - 🟢 10 vai vairāk · 🟡 mazāk nekā 10 · 🔴 izpārdots · 🔵 vēl nav pārdošanā · ⚪ atcelts
 - Kopsavilkums galvenē: atlikušās biļetes, izrāžu skaits, šajā sezonā pārdotais
 - Sezonu uzskaite ar pārslēgšanos 1. jūlijā; vecās sezonas saglabājas
-- Pārdošanas rādītājs (`▼4`) pie izrādēm, kurām skaits kritis kopš pēdējās pārbaudes
+- Pārdošanas rādītājs (`▼4`) — pēdējās nedēļas laikā pārdotās biļetes
 - Sadaļa **Nesen pabeigtas** ar pēdējām 10 noslēgtajām izrādēm
 - Sistēmas fonti, bez attēliem, bez bibliotēkām — `index.html` ~10 KB
 
@@ -87,8 +87,21 @@ Atsevišķi no sezonas summas skripts salīdzina šo palaišanu ar iepriekšējo
 | `id` iepriekš nebija | jauna izrāde — nekāda starpība |
 | `id` pazudis no API (vai iznācis ārpus 12 h filtra) | pārceļ uz `finished`, iesaldējot pēdējo zināmo skaitu — **netiek uzskatīts par kritumu līdz nullei** |
 
-`delta` rāda izmaiņas tikai kopš pēdējās pārbaudes, tāpēc nākamajā palaišanā
-tas pazūd.
+Konstatētais kritums **netiek aizmirsts nākamajā palaišanā**. Katrai izrādei
+tiek glabāts savs kritumu žurnāls `drops`, un `delta` ir to summa pēdējās
+**7 dienās**:
+
+```js
+const DROP_WINDOW_DAYS = 7;
+```
+
+Ja to nedarītu, rādītājs dzīvotu tikai 30 minūtes — līdz nākamajai palaišanai —
+un praksē to gandrīz nekad nesanāktu redzēt.
+
+Ieraksti tiek grupēti pa dienām (`[["2026-08-04", 4], ["2026-08-07", 8]]`), tāpēc
+vienas dienas pārdošanas saplūst vienā ierakstā un žurnāls nekad nav garāks par
+`DROP_WINDOW_DAYS` ierakstiem neatkarīgi no tā, cik bieži skripts palaižas.
+Vecākie ieraksti izkrīt paši.
 
 ## Faili
 
@@ -122,7 +135,8 @@ tas pazūd.
       "u": "https://www.bilesuparadize.lv/lv/event/174935",
       "s": "2026-06-10T00:00:00",                // sales.start — šķir "izpārdots" no "vēl nav pārdošanā"
       "cancelled": true,                         // tikai atceltajām (skat. CANCELLED_IDS)
-      "delta": 5                                 // tikai tad, ja skaits kritis kopš pēdējās pārbaudes
+      "drops": [["2026-08-04", 4], ["2026-08-07", 8]],  // kritumi pa dienām, 7 dienu logs
+      "delta": 12                                // drops summa — lapā "▼12"
     }
   ],
   "finished": [                                  // pēdējās 10 noslēgtās, iesaldētas
@@ -131,7 +145,7 @@ tas pazūd.
 }
 ```
 
-Lauki `cancelled` un `delta` parādās tikai tad, kad tiem ir vērtība.
+Lauki `cancelled`, `drops` un `delta` parādās tikai tad, kad tiem ir vērtība.
 
 ## Publicēšana
 

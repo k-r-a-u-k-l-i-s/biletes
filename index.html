@@ -182,7 +182,7 @@
       esc(fmtDay.format(e.at)) + " " + esc(fmtTime.format(e.at)) + "</div>" +
       '<div class="title">' + esc(e.t) + "</div>" +
       '<div class="right">' +
-      (e.delta > 0 ? '<span class="delta" title="Pārdotas kopš pēdējās pārbaudes">▼' +
+      (e.delta > 0 ? '<span class="delta" title="Pārdotas pēdējā nedēļā">▼' +
                      esc(fmtNum(e.delta)) + "</span>" : "") +
       '<div class="count ' + lv + '"><i class="dot"></i>' +
       (LABELS[lv] || esc(biletes(e.n))) + "</div></div>";

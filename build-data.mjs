@@ -24,6 +24,12 @@ const CANCELLED_IDS = new Set([
   175651, // 2026-09-29 "Divi duči sārtu rožu" — atcelta, nevis izpārdota
 ]);
 
+// How long an observed sale stays visible as a "▼" on the row. A single run's
+// drop is invisible in practice — the page is scraped every 30 min, so a badge
+// that lived one tick would almost never be on screen when someone looks.
+// Drops are kept per show and expire by age instead.
+const DROP_WINDOW_DAYS = 7;
+
 // The season runs August–May and always breaks over June–July. Rolling over on
 // 1 July puts the boundary inside that dead gap, so a season is never cut in
 // half — and it keeps a run like Aug 2026 → Jan 2027 counted as one season
@@ -110,15 +116,36 @@ const events = raw
 const prev = readPrevious();
 const prevById = new Map(prev.events.map((e) => [e.id, e]));
 
+// Drops are logged per day rather than per run: same-day sales merge into one
+// entry, so a show's log is capped at DROP_WINDOW_DAYS entries however often
+// the workflow runs.
+const today = new Date().toISOString().slice(0, 10);
+const cutoffDay = new Date(Date.now() - DROP_WINDOW_DAYS * 864e5)
+  .toISOString()
+  .slice(0, 10);
+
 let soldThisRun = 0;
 for (const e of events) {
   const before = prevById.get(e.id);                      // absent = newly listed show
+
+  // Carry the show's own drop log forward, expiring anything past the window.
+  const log = (before?.drops ?? []).filter(
+    (entry) => Array.isArray(entry) && entry[0] > cutoffDay
+  );
+
   if (before && Number.isFinite(before.n) && e.hasPrices && !e.cancelled) {
-    const delta = before.n - e.n;
-    if (delta > 0) {
-      e.delta = delta;
-      soldThisRun += delta;
+    const dropped = before.n - e.n;
+    if (dropped > 0) {
+      const last = log[log.length - 1];
+      if (last && last[0] === today) last[1] += dropped;
+      else log.push([today, dropped]);
+      soldThisRun += dropped;
     }
+  }
+
+  if (log.length) {
+    e.drops = log;
+    e.delta = log.reduce((sum, entry) => sum + entry[1], 0);
   }
   delete e.hasPrices;
 }
