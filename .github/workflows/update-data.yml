@@ -2,7 +2,7 @@ name: Atjaunot biļešu datus
 
 on:
   schedule:
-     - cron: "*/30 * * * *"   # ik pēc 30 min (GitHub var aizkavēt par dažām minūtēm)
+    - cron: "*/30 * * * *"   # ik pēc 30 min (GitHub var aizkavēt par dažām minūtēm)
   workflow_dispatch:          # palaišana ar roku
   push:
     branches: [main]
@@ -18,9 +18,9 @@ jobs:
   update:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@v4
         with:
           node-version: "20"
 
