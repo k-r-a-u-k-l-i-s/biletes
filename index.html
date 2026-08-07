@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="lv">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Biļešu pieejamība</title>
+<style>
+  *,*::before,*::after{box-sizing:border-box}
+  :root{
+    --bg:#fff; --fg:#111418; --muted:#6b7280; --line:#e8e9ec;
+    --green:#15803d; --yellow:#b45309; --red:#b91c1c;
+    --green-bg:#ecfdf3; --yellow-bg:#fffbeb; --red-bg:#fef2f2;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{
+      --bg:#0c0d0f; --fg:#f2f3f5; --muted:#8b8f99; --line:#1e2024;
+      --green:#4ade80; --yellow:#fbbf24; --red:#f87171;
+      --green-bg:#0d2818; --yellow-bg:#2a1f06; --red-bg:#2a1113;
+    }
+  }
+  html{-webkit-text-size-adjust:100%}
+  body{
+    margin:0; background:var(--bg); color:var(--fg);
+    font-family:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    font-size:16px; line-height:1.45; -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:44rem; margin:0 auto; padding:2rem 1.25rem 4rem}
+
+  h1{font-size:1.375rem; font-weight:650; letter-spacing:-.02em; margin:0}
+  .meta{color:var(--muted); font-size:.8125rem; margin:.35rem 0 0}
+
+  .legend{display:flex; flex-wrap:wrap; gap:.25rem 1rem; margin:1rem 0 0;
+          font-size:.75rem; color:var(--muted)}
+  .legend span{display:flex; align-items:center; gap:.4rem}
+
+  .dot{width:.5rem; height:.5rem; border-radius:50%; flex:none; background:currentColor}
+  .ok{color:var(--green)} .low{color:var(--yellow)} .out{color:var(--red)}
+
+  ul{list-style:none; margin:1.5rem 0 0; padding:0; border-top:1px solid var(--line)}
+  li{border-bottom:1px solid var(--line)}
+  li a,li .row{
+    display:grid; grid-template-columns:5.75rem 1fr auto;
+    gap:0 1rem; align-items:baseline;
+    padding:.75rem .25rem; color:inherit; text-decoration:none;
+  }
+  li a:hover .title{text-decoration:underline}
+  li a:focus-visible{outline:2px solid var(--muted); outline-offset:-2px; border-radius:.25rem}
+
+  .when{font-variant-numeric:tabular-nums; font-size:.8125rem; color:var(--muted);
+        line-height:1.3; white-space:nowrap}
+  .day{display:block; color:var(--fg); font-weight:550; font-size:.875rem}
+  .title{font-size:.9375rem; min-width:0; overflow-wrap:anywhere}
+  .count{
+    display:flex; align-items:center; gap:.45rem; justify-self:end;
+    font-size:.8125rem; font-variant-numeric:tabular-nums; white-space:nowrap;
+    padding:.15rem .5rem; border-radius:999px;
+  }
+  .count.ok{background:var(--green-bg)} .count.low{background:var(--yellow-bg)}
+  .count.out{background:var(--red-bg)}
+
+  .state{padding:3rem 0; text-align:center; color:var(--muted); font-size:.9375rem}
+  button{
+    font:inherit; font-size:.875rem; margin-top:.75rem; padding:.45rem .9rem;
+    border:1px solid var(--line); border-radius:.5rem;
+    background:transparent; color:var(--fg); cursor:pointer;
+  }
+  button:hover{border-color:var(--muted)}
+
+  /* Šaurā ekrānā: 1. rinda — datums un skaits, 2. rinda — nosaukums. */
+  @media (max-width:30rem){
+    li a,li .row{grid-template-columns:1fr auto; row-gap:.15rem}
+    .when{grid-area:1/1; white-space:normal}
+    .day{display:inline}
+    .count{grid-area:1/2}
+    .title{grid-area:2/1/auto/-1}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Biļešu pieejamība</h1>
+    <p class="meta" id="meta">Ielādē…</p>
+    <div class="legend">
+      <span><i class="dot ok"></i>10 vai vairāk</span>
+      <span><i class="dot low"></i>mazāk nekā 10</span>
+      <span><i class="dot out"></i>izpārdots</span>
+    </div>
+  </header>
+
+  <div id="app"><p class="state">Ielādē…</p></div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  var app  = document.getElementById("app");
+  var meta = document.getElementById("meta");
+
+  var fmtDate = new Intl.DateTimeFormat("lv-LV", { day: "numeric", month: "short" });
+  var fmtDay  = new Intl.DateTimeFormat("lv-LV", { weekday: "short" });
+  var fmtTime = new Intl.DateTimeFormat("lv-LV", { hour: "2-digit", minute: "2-digit" });
+
+  // "YYYY-MM-DDThh:mm:ss" bez laika joslas — veidojam kā vietējo laiku,
+  // lai rādītais pulksteņa laiks sakristu ar API doto.
+  function parseDT(s) {
+    var m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(s);
+    return m ? new Date(+m[1], m[2] - 1, +m[3], +m[4], +m[5]) : new Date(s);
+  }
+
+  // Latviešu skaitļa formas: 1 biļete · 5 biļetes · 0/11–19/x0 biļešu
+  function biletes(n) {
+    var d = n % 10, h = n % 100;
+    if (d === 1 && h !== 11) return n + " biļete";
+    if (d === 0 || (h >= 11 && h <= 19)) return n + " biļešu";
+    return n + " biļetes";
+  }
+
+  function level(n) {
+    if (!(n > 0)) return "out";
+    return n >= 10 ? "ok" : "low";
+  }
+
+  function esc(s) {
+    return String(s).replace(/[&<>"]/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c];
+    });
+  }
+
+  function render(data) {
+    var now = Date.now();
+    var events = (data.events || [])
+      .map(function (e) { return { at: parseDT(e.d), t: e.t, n: e.n, u: e.u }; })
+      .filter(function (e) { return e.at >= now - 36e5; });
+
+    meta.textContent = (data.venue ? data.venue + " · a" : "A") +
+      "tjaunots " + fmtTime.format(new Date(data.updated));
+
+    if (!events.length) {
+      app.innerHTML = '<p class="state">Nav gaidāmu izrāžu.</p>';
+      return;
+    }
+
+    app.innerHTML = "<ul>" + events.map(function (e) {
+      var lv = level(e.n);
+      var inner =
+        '<div class="when"><span class="day">' + esc(fmtDate.format(e.at)) + "</span> " +
+        esc(fmtDay.format(e.at)) + " " + esc(fmtTime.format(e.at)) + "</div>" +
+        '<div class="title">' + esc(e.t) + "</div>" +
+        '<div class="count ' + lv + '"><i class="dot"></i>' +
+        (lv === "out" ? "Izpārdots" : esc(biletes(e.n))) + "</div>";
+
+      return "<li>" + (e.u
+        ? '<a href="' + esc(e.u) + '" rel="noopener">' + inner + "</a>"
+        : '<div class="row">' + inner + "</div>") + "</li>";
+    }).join("") + "</ul>";
+  }
+
+  function fail() {
+    meta.textContent = "";
+    app.innerHTML = '<p class="state">Neizdevās ielādēt datus.' +
+                    '<br><button type="button" id="retry">Mēģināt vēlreiz</button></p>';
+    document.getElementById("retry").onclick = load;
+  }
+
+  var busy = false;
+  function load() {
+    if (busy) return;
+    busy = true;
+    fetch("data.json", { cache: "no-cache" })
+      .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+      .then(render)
+      .catch(fail)
+      .then(function () { busy = false; });
+  }
+
+  load();
+
+  // Atsvaidzina, atgriežoties pie cilnes (ne biežāk kā reizi minūtē).
+  var last = Date.now();
+  document.addEventListener("visibilitychange", function () {
+    if (!document.hidden && Date.now() - last > 6e4) { last = Date.now(); load(); }
+  });
+})();
+</script>
+</body>
+</html>
