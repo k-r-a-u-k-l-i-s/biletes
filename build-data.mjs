@@ -22,6 +22,11 @@ const CAPACITY = 60;
 // otherwise they inflate the season total by a full house each.
 const CANCELLED_IDS = new Set([
   175651, // 2026-09-29 "Divi duči sārtu rožu" — atcelta, nevis izpārdota
+  175656, // Šodien vai nekad
+  175657, // Šodien vai nekad
+  176424, // Šodien vai nekad
+  175648, // Viss tantes dēļ
+  165777, // Vilciens
 ]);
 
 // How long an observed sale stays visible as a "▼" on the row. A single run's
