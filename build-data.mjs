@@ -26,7 +26,6 @@ const CANCELLED_IDS = new Set([
   175657, // Šodien vai nekad
   176424, // Šodien vai nekad
   175648, // Viss tantes dēļ
-  165777, // Vilciens
 ]);
 
 // How long an observed sale stays visible as a "▼" on the row. A single run's
